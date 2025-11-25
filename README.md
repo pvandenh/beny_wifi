@@ -87,6 +87,8 @@ Currently, integration creates charger device with following sensors:
 
 Currently integration supports following actions:
 
+Controls for Setting Maximum charge current.
+
 *Only when EV is plugged to charger:*
 - beny_wifi.start_charging (*device_id*)
 - beny_wifi.stop_charging (*device_id*)
@@ -102,7 +104,6 @@ Currently integration supports following actions:
 ### Roadmap
 
 I am pretty busy with the most adorable baby boy right now, but I'll be adding some bells and whistles when I have a moment:
-- add possibility to set maximum current
 
 ### Troubleshooting guide
 
