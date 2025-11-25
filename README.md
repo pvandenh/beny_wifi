@@ -74,8 +74,7 @@ Currently, integration creates charger device with following sensors:
 | maximum_session_consumption       | [kWh]           | Session based maximum consumption                                                |
 | timer_start        | [timestamp]     | Currently set timer start time                                                |
 | timer_end          | [timestamp]     | Currently set timer end time                                                  |
-| grid_import**      | [kW]            | Imported power from grid                                                      |
-| grid_export**      | [kW]            | Exported power from grid                                                      |
+| grid_power**      | [kW]            | Import/export power from grid                                                  |
 | solar_power**      | [kW]            | Solar power                                                                   |
 | ev_power**         | [kW]            | Power for charging EV                                                         |
 | house_power**      | [kW]            | Power for house                                                               |
