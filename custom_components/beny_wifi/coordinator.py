@@ -103,6 +103,19 @@ class BenyWifiUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # BenyWifiLiveCoordinator receives a reference to this lock in __init__.
         self._udp_lock: asyncio.Lock = asyncio.Lock()
 
+        # Last successfully fetched data dict.  Returned on transient failures so
+        # that CoordinatorEntity.available stays True and sensors keep their last
+        # known values rather than flipping to unavailable during brief UDP hiccups.
+        self._cached_main_data: dict[str, Any] | None = None
+
+        # Number of consecutive full-poll failures.  We only raise UpdateFailed
+        # (which makes entities unavailable) once this exceeds the threshold.
+        self._main_miss_count: int = 0
+
+        # How many consecutive main-poll failures to tolerate before entities go
+        # unavailable.  At the default 10s scan interval this is ~1 minute of grace.
+        self._MAIN_MISS_THRESHOLD: int = 6
+
         # Derive the stale threshold from the live poll interval so that
         # DLB fields always go unavailable after ~3 minutes of missing data.
         # Minimum of 3 polls is kept so a single transient failure never triggers it.
@@ -168,11 +181,36 @@ class BenyWifiUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._stale_counts[field] = 0
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data asynchronously."""
+        """Fetch data asynchronously.
+
+        On transient UDP failures the last successfully fetched data is returned
+        so sensors stay populated rather than immediately going unavailable.
+        Only after _MAIN_MISS_THRESHOLD consecutive failures is UpdateFailed raised,
+        which marks all entities as truly unavailable.
+        """
         # Acquire the shared lock so that live coordinator polls are held off
         # while the (slower) main poll occupies the UDP socket.
         async with self._udp_lock:
-            return await self._fetch_data()
+            try:
+                data = await self._fetch_data()
+                # Successful poll — reset miss counter and update cache.
+                self._main_miss_count = 0
+                self._cached_main_data = data
+                return data
+            except Exception as err:
+                self._main_miss_count += 1
+                if self._cached_main_data is not None and self._main_miss_count < self._MAIN_MISS_THRESHOLD:
+                    _LOGGER.warning(
+                        f"Main coordinator poll failed (attempt {self._main_miss_count}/"
+                        f"{self._MAIN_MISS_THRESHOLD}), serving cached data: {err}"
+                    )
+                    return self._cached_main_data
+                # Either no cached data (first boot) or threshold exceeded — propagate.
+                _LOGGER.error(
+                    f"Main coordinator poll failed {self._main_miss_count} consecutive time(s) — "
+                    f"marking entities unavailable: {err}"
+                )
+                raise
 
     async def async_read_dlb_config(self) -> bool:
         """Attempt to read current DLB config from charger to populate _dlb_config cache.
